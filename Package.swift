@@ -12,28 +12,41 @@ let package = Package(
         .library(name: "PascalLanguage", targets: ["PascalLanguage"]),
         .library(name: "PascalConformance", targets: ["PascalConformance"]),
         .library(name: "PascalFrontendConformance", targets: ["PascalFrontendConformance"]),
-//        .library(name: "LanguageExperimentProtocol", targets: ["LanguageExperimentProtocol"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/hakkabon/Grammar.git", from: "0.3.4"),
+        .package(path: "../Grammar"),
+        .package(path: "../Lexer"),
+        .package(path: "../Parser"),
+        .package(path: "../Earley-Parser"),
+        .package(path: "../Incremental-Parsing"),
     ],
-    
+
     targets: [
         .target(
             name: "PascalLanguage",
             dependencies: [
                 .product(name: "Grammar", package: "Grammar"),
+                .product(name: "Lexer", package: "Lexer"),
+                .product(name: "Parser", package: "Parser"),
+                .product(name: "Earley-Parser", package: "Earley-Parser"),
+                .product(name: "IncrementalParsing", package: "Incremental-Parsing"),
             ],
             resources: [.process("Resources")],
         ),
         .target(name: "PascalConformance"),
         .target(
             name: "PascalFrontendConformance",
-            dependencies: ["PascalLanguage", "PascalConformance"]
+            dependencies: [
+                "PascalLanguage", "PascalConformance",
+                .product(name: "IncrementalParsing", package: "Incremental-Parsing"),
+            ]
         ),
         .testTarget(
             name: "PascalLanguageTests",
-            dependencies: ["PascalLanguage"]
+            dependencies: [
+                "PascalLanguage", "PascalConformance", "PascalFrontendConformance",
+                .product(name: "IncrementalParsing", package: "Incremental-Parsing"),
+            ]
         ),
     ]
 )
