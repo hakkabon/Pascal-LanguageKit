@@ -1,0 +1,180 @@
+> Program
+
+lexical {
+    keyword PROGRAM = "PROGRAM";
+    keyword CONST = "CONST";
+    keyword TYPE = "TYPE";
+    keyword PACKED = "PACKED";
+    keyword ARRAY = "ARRAY";
+    keyword OF = "OF";
+    keyword RECORD = "RECORD";
+    keyword END = "END";
+    keyword CASE = "CASE";
+    keyword OF = "OF";
+    keyword SET = "SET";
+    keyword OF = "OF";
+    keyword FILE = "FILE";
+    keyword OF = "OF";
+    keyword VAR = "VAR";
+    keyword PROCEDURE = "PROCEDURE";
+    keyword FUNCTION = "FUNCTION";
+    keyword VAR = "VAR";
+    keyword PROCEDURE = "PROCEDURE";
+    keyword FUNCTION = "FUNCTION";
+    keyword BEGIN = "BEGIN";
+    keyword END = "END";
+    keyword GOTO = "GOTO";
+    keyword IF = "IF";
+    keyword THEN = "THEN";
+    keyword ELSE = "ELSE";
+    keyword CASE = "CASE";
+    keyword OF = "OF";
+    keyword END = "END";
+    keyword WHILE = "WHILE";
+    keyword DO = "DO";
+    keyword REPEAT = "REPEAT";
+    keyword UNTIL = "UNTIL";
+    keyword FOR = "FOR";
+    keyword TO = "TO";
+    keyword DOWNTO = "DOWNTO";
+    keyword DO = "DO";
+    keyword WITH = "WITH";
+    keyword DO = "DO";
+    keyword NOT = "NOT";
+    keyword IN = "IN";
+    keyword OR = "OR";
+    keyword DIV = "DIV";
+    keyword MOD = "MOD";
+    keyword AND = "AND";
+    keyword NIL = "NIL";
+
+    token IDENTIFIER = /[A-Za-z_][A-Za-z0-9_]*/;
+    token NUMBER = /[0-9]+/;
+
+    trivia WHITESPACE = /\s+/;
+    trivia LINE_COMMENT = lineComment("//");
+    trivia BLOCK_COMMENT = blockComment("/*", "*/");
+}
+
+program             = program_heading block "." ;
+program_heading     = "PROGRAM" identifier [ "(" identifier_list ")" ] ";" ;
+block               = declaration_part compound_statement ;
+identifier_list     = identifier { "," identifier } ;
+
+declaration_part    = [ constant_def_part ]
+                      [ type_def_part ]
+                      [ variable_decl_part ]
+                      { procedure_or_function_declaration } ;
+
+// -------------------------------------------
+// Declarations
+// -------------------------------------------
+
+constant_def_part   = "CONST" constant_definition ";" { constant_definition ";" } ;
+constant_definition = identifier "=" constant ;
+constant            = [ "+" | "-" ] ( unsigned_number | constant_identifier ) | string_literal ;
+
+type_def_part       = "TYPE" type_definition ";" { type_definition ";" } ;
+type_definition     = identifier "=" type ;
+type                = simple_type | structured_type | pointer_type ;
+
+simple_type         = subrange_type | enumerated_type | type_identifier ;
+subrange_type       = constant ".." constant ;
+enumerated_type     = "(" identifier_list ")" ;
+
+structured_type     = [ "PACKED" ] ( array_type | record_type | set_type | file_type ) ;
+array_type          = "ARRAY" "[" simple_type { "," simple_type } "]" "OF" type ;
+record_type         = "RECORD" field_list "END" ;
+field_list          = [ fixed_part ] [ ";" variant_part ] [ ";" ] ;
+fixed_part          = record_section { ";" record_section } ;
+record_section      = identifier_list ":" type ;
+variant_part        = "CASE" tag_field type_identifier "OF" variant { ";" variant } ;
+tag_field           = [ identifier ":" ] ;
+variant             = case_label_list ":" "(" field_list ")" ;
+
+set_type            = "SET" "OF" simple_type ;
+file_type           = "FILE" "OF" type ;
+pointer_type        = "^" type_identifier ;
+
+variable_decl_part  = "VAR" variable_declaration ";" { variable_declaration ";" } ;
+variable_declaration= identifier_list ":" type ;
+
+procedure_or_function_declaration = ( procedure_declaration | function_declaration ) ";" ;
+procedure_declaration = "PROCEDURE" identifier [ formal_parameter_list ] ";" block ;
+function_declaration  = "FUNCTION" identifier [ formal_parameter_list ] ":" type_identifier ";" block ;
+
+formal_parameter_list = "(" formal_parameter_section { ";" formal_parameter_section } ")" ;
+formal_parameter_section = [ "VAR" ] identifier_list ":" type_identifier
+                         | "PROCEDURE" identifier [ formal_parameter_list ]
+                         | "FUNCTION" identifier [ formal_parameter_list ] ":" type_identifier ;
+
+// -------------------------------------------
+// Statements
+// -------------------------------------------
+
+compound_statement  = "BEGIN" statement_sequence "END" ;
+statement_sequence  = statement { ";" statement } ;
+statement           = [ label ":" ] ( simple_statement | structured_statement ) | ;
+
+simple_statement    = assignment_statement | procedure_statement | goto_statement ;
+assignment_statement= ( variable | identifier ) ":=" expression ;
+procedure_statement = identifier [ "(" actual_parameter_list ")" ] ;
+goto_statement      = "GOTO" label ;
+
+structured_statement= compound_statement | conditional_statement | repetitive_statement | with_statement ;
+conditional_statement= if_statement | case_statement ;
+if_statement        = "IF" expression "THEN" statement [ "ELSE" statement ] ;
+case_statement      = "CASE" expression "OF" case_element { ";" case_element } [ ";" ] "END" ;
+case_element        = case_label_list ":" statement ;
+case_label_list     = constant { "," constant } ;
+
+repetitive_statement= while_statement | repeat_statement | for_statement ;
+while_statement     = "WHILE" expression "DO" statement ;
+repeat_statement    = "REPEAT" statement_sequence "UNTIL" expression ;
+for_statement       = "FOR" identifier ":=" expression ( "TO" | "DOWNTO" ) expression "DO" statement ;
+
+with_statement      = "WITH" variable_list "DO" statement ;
+variable_list       = variable { "," variable } ;
+
+// -------------------------------------------
+// Expressions
+// -------------------------------------------
+
+expression          = simple_expression [ relational_operator simple_expression ] ;
+simple_expression   = [ "+" | "-" ] term { adding_operator term } ;
+term                = factor { multiplying_operator factor } ;
+factor              = variable
+                    | unsigned_constant
+                    | function_designator
+                    | "(" expression ")"
+                    | "NOT" factor
+                    | set_constructor ;
+
+function_designator = identifier "(" actual_parameter_list ")" ;
+actual_parameter_list= actual_parameter { "," actual_parameter } ;
+actual_parameter    = expression | variable | identifier ;
+
+set_constructor     = "[" [ element_description { "," element_description } ] "]" ;
+element_description = expression [ ".." expression ] ;
+
+variable            = identifier { component_selector } ;
+component_selector  = "[" expression { "," expression } "]" | "." identifier | "^" ;
+
+// -------------------------------------------
+// Operators and Lexical Tokens
+// -------------------------------------------
+
+relational_operator = "=" | "<>" | "<" | "<=" | ">" | ">=" | "IN" ;
+adding_operator     = "+" | "-" | "OR" ;
+multiplying_operator= "*" | "/" | "DIV" | "MOD" | "AND" ;
+
+//TODO: These are Lexical Tokens and have to be moved to the lexical definitions
+identifier          = letter { letter | digit } ;
+unsigned_constant   = unsigned_number | string_literal | "NIL" ;
+unsigned_number     = unsigned_integer | unsigned_real ;
+unsigned_integer    = digit { digit } ;
+unsigned_real       = digit { digit } "." digit { digit } [ "E" [ "+" | "-" ] digit { digit } ] ;
+
+constant_identifier = identifier ;
+type_identifier     = identifier ;
+label               = unsigned_integer ;
