@@ -28,6 +28,12 @@ trivia BRACE_COMMENT = blockComment("{", "}");
 The artifact validates its start symbol, every production terminal, duplicate
 rules, and unused significant lexical rules during package initialization.
 
+The provider adopts `Language-Tooling` directly. Its tooling session currently
+offers grammar-derived keyword completion and deterministic lexical semantic
+tokens. Definition, references, hover, formatting, and rename remain absent
+until Pascal gains the corresponding language-owned semantic and formatting
+policies.
+
 ## Products
 
 - `PascalLanguage`: compiled artifact, lossless lexer, incremental tokenizer,
@@ -45,7 +51,8 @@ rules, and unused significant lexical rules during package initialization.
   therefore retain a real BSR/SPPF plus portable insert/delete evidence. The
   trial does not yet project that forest into a Pascal-specific typed CST.
 - Semantic analysis, formatting, compilation and execution are outside this
-  trial increment.
+  trial increment; shared tooling contracts do not manufacture those language
+  semantics.
 - The grammar is a practical core and still requires conformance work before it
   can claim a specific Pascal standard.
 

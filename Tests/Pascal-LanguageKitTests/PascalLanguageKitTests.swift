@@ -1,5 +1,6 @@
 import Foundation
 import IncrementalParsing
+import LanguageTooling
 import PascalConformance
 import PascalFrontendConformance
 @testable import PascalLanguage
@@ -114,6 +115,23 @@ struct PascalLanguageKitTests {
 
         #expect(analysis.diagnostics.allSatisfy { $0.severity == .warning })
         #expect(!analysis.recoveryEdits.isEmpty)
+    }
+
+    @Test func providerAdoptsSharedToolingSession() async throws {
+        let provider = PascalProvider()
+        let session = provider.makeToolingSession()
+        let source = PascalConformanceCorpus.accepted[0]
+
+        _ = try await session.analyze(.init(
+            text: source,
+            revision: .init(9)))
+        let completions = try await session.completions(
+            at: .init(line: 0, character: 0))
+        let semanticTokens = try await session.semanticTokens()
+
+        #expect(completions.contains { $0.label.lowercased() == "program" })
+        #expect(!semanticTokens.data.isEmpty)
+        #expect(semanticTokens.data.count.isMultiple(of: 5))
     }
 
     @Test func conformanceReportsAgreeAndCampaignMatchesCleanRuns() async throws {

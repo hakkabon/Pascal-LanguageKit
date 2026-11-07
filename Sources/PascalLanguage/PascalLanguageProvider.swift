@@ -1,6 +1,8 @@
+import Grammar
 import IncrementalParsing
+import LanguageTooling
 
-public struct PascalProvider: LanguageProvider {
+public struct PascalProvider: LanguageToolingProvider {
     public let descriptor = LanguageProviderDescriptor(
         id: "pascal",
         displayName: "Pascal",
@@ -12,14 +14,16 @@ public struct PascalProvider: LanguageProvider {
 
     public init() {}
 
-    public func makeSession() -> any LanguageProviderSession {
+    public func makeToolingSession() -> any LanguageToolingSession {
         PascalProviderSession()
     }
 }
 
-public actor PascalProviderSession: LanguageProviderSession {
+public actor PascalProviderSession: LanguageToolingSession {
     private let languageKit: PascalLanguageKit
     private let session: PascalLanguageSession
+    private var currentText: String?
+    private var currentAnalysis: PascalAnalysis?
 
     public init(languageKit: PascalLanguageKit = .bundled) {
         self.languageKit = languageKit
@@ -31,6 +35,8 @@ public actor PascalProviderSession: LanguageProviderSession {
         change: SourceChange?
     ) async throws -> LanguageProviderAnalysis {
         let analysis = try await session.analyze(snapshot, change: change)
+        currentText = snapshot.text
+        currentAnalysis = analysis
         return LanguageProviderAnalysis(
             languageID: "pascal",
             revision: snapshot.revision,
@@ -54,6 +60,52 @@ public actor PascalProviderSession: LanguageProviderSession {
                 .init(operation: "lexing", evidence: analysis.lexing.evidence),
                 .init(operation: "parsing", evidence: analysis.parsing.metrics.evidence),
             ])
+    }
+
+    public func completions(
+        at position: ToolingPosition
+    ) async throws -> [ToolingCompletionItem] {
+        guard let currentText else { throw LanguageToolingError.documentNotAnalyzed }
+        guard SourceLineMap(currentText).offset(of: position) != nil else {
+            throw LanguageToolingError.invalidPosition(position)
+        }
+        return languageKit.artifact.tokenDefinitions
+            .filter { $0.role == .keyword }
+            .map {
+                let spelling: String
+                switch $0.matcher {
+                case .literal(let value), .caseInsensitiveLiteral(let value):
+                    spelling = value
+                default:
+                    spelling = $0.name.lowercased()
+                }
+                return ToolingCompletionItem(
+                    label: spelling,
+                    kind: .keyword,
+                    detail: "Pascal keyword",
+                    insertText: spelling)
+            }
+            .toolingUniquedByID()
+            .sorted { $0.label < $1.label }
+    }
+
+    public func semanticTokens() async throws -> ToolingSemanticTokensResult {
+        guard let currentText, let currentAnalysis else {
+            throw LanguageToolingError.documentNotAnalyzed
+        }
+        let map = SourceLineMap(currentText)
+        let tokens = currentAnalysis.lexing.lexed.elements.compactMap { element in
+            semanticTokenType(element).map {
+                ToolingSemanticToken(
+                    range: map.toolingRange(.init(
+                        element.range.lowerBound,
+                        element.range.upperBound)),
+                    type: $0)
+            }
+        }
+        return SemanticTokenEncoder.encode(
+            tokens,
+            resultID: "pascal:\(currentAnalysis.revision.rawValue)")
     }
 
     private func providerTokens(
@@ -86,6 +138,32 @@ public actor PascalProviderSession: LanguageProviderSession {
             return LanguageProviderToken(
                 range: .init(element.range),
                 classification: classification)
+        }
+    }
+
+    private func semanticTokenType(
+        _ element: PascalLexicalElement
+    ) -> ToolingSemanticTokenType? {
+        switch element.kind {
+        case .invalid:
+            return nil
+        case .trivia(let name):
+            return name == "WHITESPACE" ? nil : .comment
+        case .token(let kind):
+            guard let definition = languageKit.artifact.definition(
+                named: kind.rawValue) else { return nil }
+            switch definition.role {
+            case .keyword: return .keyword
+            case .symbol: return .operatorToken
+            case .trivia: return .comment
+            case .token:
+                switch kind.rawValue {
+                case "IDENTIFIER": return .variable
+                case "STRING_LITERAL": return .string
+                case "UNSIGNED_INTEGER", "UNSIGNED_REAL": return .number
+                default: return nil
+                }
+            }
         }
     }
 }

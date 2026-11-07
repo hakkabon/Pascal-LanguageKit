@@ -19,6 +19,7 @@ let package = Package(
         .package(path: "../Parser"),
         .package(path: "../Earley-Parser"),
         .package(path: "../Incremental-Parsing"),
+        .package(path: "../Language-Tooling"),
     ],
 
     targets: [
@@ -30,6 +31,7 @@ let package = Package(
                 .product(name: "Parser", package: "Parser"),
                 .product(name: "Earley-Parser", package: "Earley-Parser"),
                 .product(name: "IncrementalParsing", package: "Incremental-Parsing"),
+                .product(name: "LanguageTooling", package: "Language-Tooling"),
             ],
             resources: [.process("Resources")],
         ),
@@ -46,6 +48,7 @@ let package = Package(
             dependencies: [
                 "PascalLanguage", "PascalConformance", "PascalFrontendConformance",
                 .product(name: "IncrementalParsing", package: "Incremental-Parsing"),
+                .product(name: "LanguageTooling", package: "Language-Tooling"),
             ]
         ),
     ]
