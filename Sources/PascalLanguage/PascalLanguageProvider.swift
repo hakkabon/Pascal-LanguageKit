@@ -6,7 +6,9 @@ public struct PascalProvider: LanguageProvider {
         displayName: "Pascal",
         fileExtensions: ["pas", "p"],
         distribution: .externalLanguageKit,
-        capabilities: [.syntaxHighlighting, .incrementalAnalysis, .diagnostics])
+        capabilities: [
+            .syntaxHighlighting, .incrementalAnalysis, .diagnostics, .recovery,
+        ])
 
     public init() {}
 
@@ -36,9 +38,17 @@ public actor PascalProviderSession: LanguageProviderSession {
             tokens: providerTokens(analysis.lexing.lexed.elements),
             diagnostics: analysis.parsing.diagnostics.map {
                 LanguageProviderDiagnostic(
-                    severity: .error,
+                    severity: analysis.parsing.recovered ? .warning : .error,
                     message: $0.message,
                     range: .init($0.range))
+            },
+            recoveryEdits: analysis.parsing.recoveryEdits.map { edit in
+                switch edit {
+                case .insert(let terminal, let index):
+                    .insert(terminal: terminal, atToken: index)
+                case .delete(let terminal, let index):
+                    .delete(terminal: terminal, atToken: index)
+                }
             },
             operations: [
                 .init(operation: "lexing", evidence: analysis.lexing.evidence),

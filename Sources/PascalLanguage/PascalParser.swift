@@ -8,12 +8,21 @@ import Parser
 public struct PascalParseMetrics: Sendable, Equatable {
     public let configurationCount: Int
     public let forestNodeCount: Int
+    public let recoverySearchStates: Int
     public let evidence: IncrementalExecutionEvidence
 }
 
+public enum PascalRecoveryEdit: Sendable, Equatable {
+    case insert(terminal: String, atToken: Int)
+    case delete(terminal: String, atToken: Int)
+}
+
 public struct PascalParseResult: Sendable, Equatable {
+    /// `true` only for an input accepted without repair.
     public let accepted: Bool
+    public let recovered: Bool
     public let diagnostics: [PascalDiagnostic]
+    public let recoveryEdits: [PascalRecoveryEdit]
     public let metrics: PascalParseMetrics
 }
 
@@ -36,10 +45,13 @@ public struct PascalParser: Sendable {
         guard lexed.diagnostics.isEmpty else {
             return PascalParseResult(
                 accepted: false,
+                recovered: false,
                 diagnostics: lexed.diagnostics,
+                recoveryEdits: [],
                 metrics: .init(
                     configurationCount: 0,
                     forestNodeCount: 0,
+                    recoverySearchStates: 0,
                     evidence: parserEvidence(
                         incrementalRequest: incrementalRequest,
                         rebuilt: 0)))
@@ -49,27 +61,38 @@ public struct PascalParser: Sendable {
             let stream = try PascalTokenStream(source: source, tokens: lexed.tokens)
             let parser = Earley_Parser.EarleyParser(
                 grammar: ecosystemGrammar(languageKit.artifact))
-            let result = try parser.parse(stream: stream)
-            let snapshot = try result.sppfGraph?.portableSnapshot()
-            let accepted = result.isSuccessful
+            let recovery = try parser.parseRecovering(
+                stream: stream,
+                insertionCandidates: pascalRecoveryCandidates,
+                policy: .init(maximumEditCost: 2, maximumExploredStates: 2_000))
+            let result = recovery.parseResult
+            let snapshot = try result?.sppfGraph?.portableSnapshot()
             return PascalParseResult(
-                accepted: accepted,
-                diagnostics: accepted ? [] : [syntaxDiagnostic(tokens: stream.tokens)],
+                accepted: recovery.status == .accepted,
+                recovered: recovery.status == .recovered,
+                diagnostics: recovery.diagnostics.map {
+                    pascalDiagnostic($0, source: source, tokens: stream.tokens)
+                },
+                recoveryEdits: recovery.recoveryEdits.map(pascalRecoveryEdit),
                 metrics: .init(
-                    configurationCount: result.bsr.count,
+                    configurationCount: result?.bsr.count ?? 0,
                     forestNodeCount: snapshot?.nodes.count ?? 0,
+                    recoverySearchStates: recovery.exploredStates,
                     evidence: parserEvidence(
                         incrementalRequest: incrementalRequest,
                         rebuilt: stream.count + 1)))
         } catch {
             return PascalParseResult(
                 accepted: false,
+                recovered: false,
                 diagnostics: [PascalDiagnostic(
                     message: "Input does not conform to the bundled Pascal grammar.",
                     range: source.utf16.count..<source.utf16.count)],
+                recoveryEdits: [],
                 metrics: .init(
                     configurationCount: 0,
                     forestNodeCount: 0,
+                    recoverySearchStates: 0,
                     evidence: parserEvidence(
                         incrementalRequest: incrementalRequest,
                         rebuilt: 0)))
@@ -165,11 +188,46 @@ private func ecosystemGrammar(_ artifact: PascalGrammarArtifact) -> Grammar {
         lexicalTokens: [:])
 }
 
-private func syntaxDiagnostic(tokens: [PascalToken]) -> PascalDiagnostic {
-    let range = tokens.last?.range ?? 0..<0
-    return PascalDiagnostic(
-        message: "Input does not conform to the bundled Pascal grammar.",
-        range: range.upperBound..<range.upperBound)
+private var pascalRecoveryCandidates: [Terminal] {
+    [
+        "SEMICOLON", "PERIOD", "END", "THEN", "DO", "RPAREN", "RBRACKET",
+        "COMMA", "COLON",
+    ]
+}
+
+private func pascalRecoveryEdit(_ edit: RecoveryEdit) -> PascalRecoveryEdit {
+    switch edit {
+    case .insert(let terminal, let index):
+        .insert(terminal: terminalName(terminal), atToken: index)
+    case .delete(let terminal, let index):
+        .delete(terminal: terminalName(terminal), atToken: index)
+    case .skip(let terminals, let index):
+        .delete(
+            terminal: terminals.map(terminalName).joined(separator: " "),
+            atToken: index)
+    }
+}
+
+private func terminalName(_ terminal: Terminal) -> String {
+    if case .string(let name) = terminal { return name }
+    return terminal.description
+}
+
+private func pascalDiagnostic(
+    _ diagnostic: Parser.ParseDiagnostic,
+    source: String,
+    tokens: [PascalToken]
+) -> PascalDiagnostic {
+    let range: Range<Int>
+    if let sourceRange = diagnostic.range {
+        let nsRange = NSRange(sourceRange, in: source)
+        range = nsRange.location..<(nsRange.location + nsRange.length)
+    } else if let index = diagnostic.tokenIndex, index < tokens.count {
+        range = tokens[index].range
+    } else {
+        range = source.utf16.count..<source.utf16.count
+    }
+    return PascalDiagnostic(message: diagnostic.message, range: range)
 }
 
 private func parserEvidence(

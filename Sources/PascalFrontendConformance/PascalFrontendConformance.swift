@@ -9,10 +9,11 @@ public struct PascalFrontendExperimentObservation: Codable, Hashable, Sendable {
     public let accepted: Bool
     public let tokenEvidence: [String]
     public let diagnostics: [String]
+    public let recoveryEdits: [LanguageProviderRecoveryEdit]
 }
 
 public struct PascalFrontendExperimentReport: Codable, Hashable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
     public let schemaVersion: Int
     public let frontendID: String
     public let observations: [PascalFrontendExperimentObservation]
@@ -63,7 +64,8 @@ public enum PascalFrontendExperimentSuite {
                 },
                 diagnostics: analysis.diagnostics.map {
                     "\($0.severity.rawValue)|\($0.range.lowerBound):\($0.range.upperBound)|\($0.message)"
-                }))
+                },
+                recoveryEdits: analysis.recoveryEdits))
         }
         return .init(frontendID: frontendID, observations: observations)
     }

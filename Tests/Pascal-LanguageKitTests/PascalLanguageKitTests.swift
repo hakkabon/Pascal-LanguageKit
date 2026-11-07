@@ -55,6 +55,13 @@ struct PascalLanguageKitTests {
             let result = parser.parse(source: source, lexed: lexer.tokenize(snapshot))
             #expect(!result.accepted, "Expected rejected Pascal fixture \(index)")
             #expect(!result.diagnostics.isEmpty)
+            if index < 3 {
+                #expect(result.recovered, "Expected syntax fixture \(index) to recover")
+                #expect(!result.recoveryEdits.isEmpty)
+                #expect(result.metrics.forestNodeCount > 0)
+            } else {
+                #expect(!result.recovered, "Lexical errors must not be repaired by the parser")
+            }
         }
     }
 
@@ -89,6 +96,7 @@ struct PascalLanguageKitTests {
             revision: .init(7)))
 
         #expect(provider.descriptor.distribution == .externalLanguageKit)
+        #expect(provider.descriptor.capabilities.contains(.recovery))
         #expect(analysis.languageID == "pascal")
         #expect(analysis.artifact == PascalLanguageKit.bundled.artifact.incrementalIdentity)
         #expect(analysis.diagnostics.isEmpty)
@@ -96,6 +104,16 @@ struct PascalLanguageKitTests {
         #expect(analysis.tokens.contains { $0.classification == "comment" })
         #expect(analysis.evidence(for: "lexing") != nil)
         #expect(analysis.evidence(for: "parsing") != nil)
+    }
+
+    @Test func providerPublishesGeneralizedRecoveryEvidence() async throws {
+        let provider = PascalProvider()
+        let analysis = try await provider.makeSession().analyze(.init(
+            text: PascalConformanceCorpus.rejected[0],
+            revision: .init(8)))
+
+        #expect(analysis.diagnostics.allSatisfy { $0.severity == .warning })
+        #expect(!analysis.recoveryEdits.isEmpty)
     }
 
     @Test func conformanceReportsAgreeAndCampaignMatchesCleanRuns() async throws {

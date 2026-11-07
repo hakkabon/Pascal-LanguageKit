@@ -61,6 +61,7 @@ public enum PascalProductCampaign {
         let artifact: IncrementalArtifactIdentity?
         let tokens: [LanguageProviderToken]
         let diagnostics: [LanguageProviderDiagnostic]
+        let recoveryEdits: [LanguageProviderRecoveryEdit]
     }
 
     private static let definitions: [Definition] = [
@@ -75,7 +76,7 @@ public enum PascalProductCampaign {
         .init(
             scenario: .init(
                 id: "rejected.missing-end",
-                title: "Rejected incomplete Pascal program"),
+                title: "Recovered incomplete Pascal program"),
             source: PascalConformanceCorpus.rejected[1],
             editNeedle: nil,
             replacement: "",
@@ -128,7 +129,8 @@ public enum PascalProductCampaign {
         .init(
             artifact: analysis.artifact,
             tokens: analysis.tokens,
-            diagnostics: analysis.diagnostics)
+            diagnostics: analysis.diagnostics,
+            recoveryEdits: analysis.recoveryEdits)
     }
 }
 

@@ -40,8 +40,10 @@ rules, and unused significant lexical rules during package initialization.
 
 - The Earley chart is rebuilt after edits. The provider reports
   `pascal.earley.fullReparse`; it never claims parser-state reuse.
-- Syntax recovery currently produces a stable bounded diagnostic, but not a
-  repaired Pascal CST.
+- Syntax recovery performs a deterministic, bounded minimum-edit search through
+  the shared `Parser` facility. Successful repairs are reparsed by Earley and
+  therefore retain a real BSR/SPPF plus portable insert/delete evidence. The
+  trial does not yet project that forest into a Pascal-specific typed CST.
 - Semantic analysis, formatting, compilation and execution are outside this
   trial increment.
 - The grammar is a practical core and still requires conformance work before it
