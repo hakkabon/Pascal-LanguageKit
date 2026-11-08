@@ -44,8 +44,9 @@ policies.
 
 ## Current limitations
 
-- The Earley chart is rebuilt after edits. The provider reports
-  `pascal.earley.fullReparse`; it never claims parser-state reuse.
+- Accepted edits resume Earley-Parser's native live chart using stable Pascal
+  token identities. Diagnostic and generalized-recovery searches deliberately
+  use a clean fallback when the live recognizer cannot accept the input.
 - Syntax recovery performs a deterministic, bounded minimum-edit search through
   the shared `Parser` facility. Successful repairs are reparsed by Earley and
   therefore retain a real BSR/SPPF plus portable insert/delete evidence. The

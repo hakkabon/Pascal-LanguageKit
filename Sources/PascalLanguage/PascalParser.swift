@@ -26,15 +26,18 @@ public struct PascalParseResult: Sendable, Equatable {
     public let metrics: PascalParseMetrics
 }
 
-/// Generalized baseline parser for the Pascal trial. Pascal's overlapping
-/// designators and dangling-else shape are intentional; the language kit uses
-/// the ecosystem Earley parser instead of hiding those conflicts in a private
-/// recursive-descent implementation.
-public struct PascalParser: Sendable {
+/// Generalized parser for the Pascal trial. Pascal's overlapping designators
+/// and dangling-else shape are intentional; accepted edits use the ecosystem
+/// Earley parser's live chart session, while malformed input is delegated to
+/// its bounded clean recovery search.
+public final class PascalParser: @unchecked Sendable {
     public let languageKit: PascalLanguageKit
+    private let incrementalSession: EarleyIncrementalSession
 
     public init(languageKit: PascalLanguageKit = .bundled) {
         self.languageKit = languageKit
+        incrementalSession = EarleyIncrementalSession(
+            grammar: ecosystemGrammar(languageKit.artifact))
     }
 
     public func parse(
@@ -61,6 +64,24 @@ public struct PascalParser: Sendable {
             let stream = try PascalTokenStream(source: source, tokens: lexed.tokens)
             let parser = Earley_Parser.EarleyParser(
                 grammar: ecosystemGrammar(languageKit.artifact))
+            if let live = try? incrementalSession.parse(
+                stream: stream,
+                tokenIdentities: stream.tokens.map {
+                    EarleyTokenIdentity($0.id)
+                }), live.result.isSuccessful {
+                let snapshot = try live.result.sppfGraph?.portableSnapshot()
+                return PascalParseResult(
+                    accepted: true,
+                    recovered: false,
+                    diagnostics: [],
+                    recoveryEdits: [],
+                    metrics: .init(
+                        configurationCount: live.result.bsr.count,
+                        forestNodeCount: snapshot?.nodes.count ?? 0,
+                        recoverySearchStates: 0,
+                        evidence: live.evidence))
+            }
+            incrementalSession.reset()
             let recovery = try parser.parseRecovering(
                 stream: stream,
                 insertionCandidates: pascalRecoveryCandidates,
@@ -97,6 +118,10 @@ public struct PascalParser: Sendable {
                         incrementalRequest: incrementalRequest,
                         rebuilt: 0)))
         }
+    }
+
+    public func reset() {
+        incrementalSession.reset()
     }
 }
 
@@ -138,6 +163,7 @@ public actor PascalLanguageSession {
 
     public func reset() {
         tokenizer.reset()
+        parser.reset()
         previousRevision = nil
     }
 }
@@ -238,8 +264,8 @@ private func parserEvidence(
         return .init(
             strategy: .fallback,
             fallback: .init(
-                code: "pascal.earley.fullReparse",
-                detail: "Tokenization was incremental; the Pascal Earley chart was rebuilt."),
+                code: "pascal.earley.cleanFallback",
+                detail: "The live parse could not accept the input; diagnostics and generalized recovery used a clean search."),
             measurements: [.init(
                 dimension: .chartColumns,
                 reused: 0,

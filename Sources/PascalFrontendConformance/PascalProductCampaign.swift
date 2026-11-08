@@ -5,7 +5,7 @@ import PascalLanguage
 
 public enum PascalProductCampaign {
     public static let campaignProtocol = IncrementalMeasurementProtocol(
-        id: "pascal-language-kit-trial-v1",
+        id: "pascal-language-kit-trial-v2",
         warmupIterations: 1,
         measurementIterations: 3)
 
@@ -91,8 +91,8 @@ public enum PascalProductCampaign {
             operation: "lexing"),
         .init(
             scenario: .init(
-                id: "edit.earley.disclosure",
-                title: "Disclose full Pascal Earley chart rebuild"),
+                id: "edit.earley.chart",
+                title: "Resume native Pascal Earley chart"),
             source: PascalConformanceCorpus.mutationSeeds[1],
             editNeedle: "10",
             replacement: "20",

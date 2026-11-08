@@ -66,7 +66,7 @@ struct PascalLanguageKitTests {
         }
     }
 
-    @Test func incrementalTokenizerReusesStableTokensAndParserDisclosesFallback() async throws {
+    @Test func incrementalTokenizerAndEarleyParserReuseNativeState() async throws {
         let source = PascalConformanceCorpus.mutationSeeds[0]
         let initial = SourceSnapshot(text: source, revision: .init(1))
         let range = try #require(source.range(of: "Count"))
@@ -84,9 +84,13 @@ struct PascalLanguageKitTests {
         #expect(analysis.parsing.accepted)
         #expect(analysis.lexing.metrics.incremental)
         #expect(analysis.lexing.metrics.reusedSuffixTokenCount > 0)
-        #expect(analysis.parsing.metrics.evidence.strategy == .fallback)
-        #expect(analysis.parsing.metrics.evidence.fallback?.code
-            == "pascal.earley.fullReparse")
+        #expect(analysis.parsing.metrics.evidence.strategy == .incremental)
+        #expect(analysis.parsing.metrics.evidence.measurements.first {
+            $0.dimension == .chartColumns
+        }?.reused ?? 0 > 0)
+        #expect(analysis.parsing.metrics.evidence.measurements.first {
+            $0.dimension == .chartFacts
+        }?.reused ?? 0 > 0)
     }
 
     @Test func providerPublishesPortableAnalysis() async throws {
@@ -152,7 +156,7 @@ struct PascalLanguageKitTests {
         #expect(report.summaries.first { $0.scenarioID == "edit.lexer.identifier" }?
             .measurement(for: .tokens)?.reused ?? 0 > 0)
         #expect(report.summaries.first {
-            $0.scenarioID == "edit.earley.disclosure"
-        }?.fallbackCount == 1)
+            $0.scenarioID == "edit.earley.chart"
+        }?.measurement(for: .chartColumns)?.reused ?? 0 > 0)
     }
 }
