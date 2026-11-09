@@ -129,12 +129,14 @@ public struct PascalAnalysis: Sendable, Equatable {
     public let revision: SourceRevision
     public let lexing: PascalIncrementalLexResult
     public let parsing: PascalParseResult
+    public let semantics: PascalSemanticModel
 }
 
 public actor PascalLanguageSession {
     private let parser: PascalParser
     private var tokenizer: PascalIncrementalTokenizer
     private var previousRevision: SourceRevision?
+    private var semanticAnalyzer = PascalIncrementalSemanticAnalyzer()
 
     public init(languageKit: PascalLanguageKit = .bundled) {
         parser = PascalParser(languageKit: languageKit)
@@ -154,16 +156,21 @@ public actor PascalLanguageSession {
             source: snapshot.text,
             lexed: lexing.lexed,
             incrementalRequest: incrementalRequest)
+        let semantics = semanticAnalyzer.analyze(
+            revision: snapshot.revision, tokens: lexing.lexed.tokens,
+            reusingPrevious: incrementalRequest && lexing.metrics.incremental)
         previousRevision = snapshot.revision
         return PascalAnalysis(
             revision: snapshot.revision,
             lexing: lexing,
-            parsing: parsing)
+            parsing: parsing,
+            semantics: semantics)
     }
 
     public func reset() {
         tokenizer.reset()
         parser.reset()
+        semanticAnalyzer.reset()
         previousRevision = nil
     }
 }

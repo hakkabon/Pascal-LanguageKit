@@ -138,6 +138,58 @@ struct PascalLanguageKitTests {
         #expect(semanticTokens.data.count.isMultiple(of: 5))
     }
 
+    @Test func semanticTrialPublishesBindingsAndSharedToolingQueries() async throws {
+        let source = "program Demo; const limit = 10; type index = 1..10; "
+            + "var i: index; begin i := limit end."
+        let session = PascalProviderSession(documentURI: "file:///trial.pas")
+        let analysis = try await session.analyze(.init(
+            text: source, revision: .init(1)), change: nil)
+        let limitUse = (source as NSString).range(of: "limit", options: .backwards)
+        let iUse = (source as NSString).range(of: "i :=")
+
+        #expect(analysis.evidence(for: "semantics") != nil)
+        #expect(analysis.tokens.contains {
+            $0.classification == "constant" && $0.modifiers.contains("declaration")
+        })
+        let definition = try await session.definition(
+            at: .init(line: 0, character: limitUse.location))
+        let hover = try await session.hover(
+            at: .init(line: 0, character: iUse.location))
+        let references = try await session.references(
+            at: .init(line: 0, character: limitUse.location))
+        let completions = try await session.completions(
+            at: .init(line: 0, character: source.utf16.count))
+        let semanticTokens = try await session.semanticTokens()
+
+        #expect(definition?.uri == "file:///trial.pas")
+        #expect(definition?.range.start.character
+            == (source as NSString).range(of: "limit").location)
+        #expect(hover?.contents == "variable i")
+        #expect(references.count == 2)
+        #expect(completions.contains { $0.label.lowercased() == "limit" })
+        #expect(completions.contains { $0.label.lowercased() == "index" })
+        #expect(!semanticTokens.data.isEmpty)
+    }
+
+    @Test func semanticTrialReusesStableBindingsAcrossLiteralEdit() async throws {
+        let source = "program Demo; const limit = 10; var i: integer; begin i := limit end."
+        let initial = SourceSnapshot(text: source, revision: .init(1))
+        let range = (source as NSString).range(of: "10")
+        let transition = try SourceEdit(
+            baseRevision: initial.revision,
+            range: .init(location: range.location, length: range.length),
+            replacement: "100").applying(to: initial)
+        let session = PascalLanguageSession()
+        _ = try await session.analyze(initial)
+        let edited = try await session.analyze(
+            transition.after, change: transition)
+
+        #expect(edited.semantics.reuseMetrics.incremental)
+        #expect(edited.semantics.reuseMetrics.reusedSymbolCount > 0)
+        #expect(edited.semantics.reuseMetrics.reusedReferenceCount > 0)
+        #expect(edited.semantics.reuseMetrics.evidence.strategy == .incremental)
+    }
+
     @Test func conformanceReportsAgreeAndCampaignMatchesCleanRuns() async throws {
         let first = try await PascalFrontendExperimentSuite.run(frontendID: "trial-a")
         let second = try await PascalFrontendExperimentSuite.run(frontendID: "trial-b")
@@ -158,5 +210,8 @@ struct PascalLanguageKitTests {
         #expect(report.summaries.first {
             $0.scenarioID == "edit.earley.chart"
         }?.measurement(for: .chartColumns)?.reused ?? 0 > 0)
+        #expect(report.summaries.first {
+            $0.scenarioID == "edit.semantics.literal"
+        }?.measurement(for: .semanticNodes)?.reused ?? 0 > 0)
     }
 }

@@ -5,7 +5,7 @@ import PascalLanguage
 
 public enum PascalProductCampaign {
     public static let campaignProtocol = IncrementalMeasurementProtocol(
-        id: "pascal-language-kit-trial-v2",
+        id: "pascal-language-kit-trial-v3",
         warmupIterations: 1,
         measurementIterations: 3)
 
@@ -97,6 +97,14 @@ public enum PascalProductCampaign {
             editNeedle: "10",
             replacement: "20",
             operation: "parsing"),
+        .init(
+            scenario: .init(
+                id: "edit.semantics.literal",
+                title: "Retain Pascal bindings after a literal edit"),
+            source: PascalConformanceCorpus.mutationSeeds[1],
+            editNeedle: "10",
+            replacement: "20",
+            operation: "semantics"),
     ]
 
     private static func execute(_ definition: Definition) async throws -> Execution {
