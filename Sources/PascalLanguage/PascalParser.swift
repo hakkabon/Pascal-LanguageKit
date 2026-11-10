@@ -107,8 +107,10 @@ public final class PascalParser: @unchecked Sendable {
                 accepted: false,
                 recovered: false,
                 diagnostics: [PascalDiagnostic(
+                    severity: .error,
                     message: "Input does not conform to the bundled Pascal grammar.",
-                    range: source.utf16.count..<source.utf16.count)],
+                    range: SourceRange(
+                        location: source.utf16.count, length: 0))],
                 recoveryEdits: [],
                 metrics: .init(
                     configurationCount: 0,
@@ -251,16 +253,18 @@ private func pascalDiagnostic(
     source: String,
     tokens: [PascalToken]
 ) -> PascalDiagnostic {
-    let range: Range<Int>
+    let range: SourceRange
     if let sourceRange = diagnostic.range {
         let nsRange = NSRange(sourceRange, in: source)
-        range = nsRange.location..<(nsRange.location + nsRange.length)
+        range = SourceRange(
+            location: nsRange.location, length: nsRange.length)
     } else if let index = diagnostic.tokenIndex, index < tokens.count {
         range = tokens[index].range
     } else {
-        range = source.utf16.count..<source.utf16.count
+        range = SourceRange(location: source.utf16.count, length: 0)
     }
-    return PascalDiagnostic(message: diagnostic.message, range: range)
+    return PascalDiagnostic(
+        severity: .error, message: diagnostic.message, range: range)
 }
 
 private func parserEvidence(

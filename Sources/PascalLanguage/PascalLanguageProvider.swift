@@ -19,7 +19,6 @@ public struct PascalProvider: LanguageToolingProvider {
         PascalProviderSession()
     }
 }
-
 public actor PascalProviderSession: LanguageToolingSession {
     private let languageKit: PascalLanguageKit
     private let session: PascalLanguageSession
@@ -52,11 +51,11 @@ public actor PascalProviderSession: LanguageToolingSession {
                 LanguageProviderDiagnostic(
                     severity: analysis.parsing.recovered ? .warning : .error,
                     message: $0.message,
-                    range: .init($0.range))
+                    range: $0.range)
             } + analysis.semantics.diagnostics.map {
                 LanguageProviderDiagnostic(
                     severity: .error, message: $0.message,
-                    range: .init($0.range))
+                    range: $0.range)
             },
             recoveryEdits: analysis.parsing.recoveryEdits.map { edit in
                 switch edit {
@@ -176,7 +175,7 @@ public actor PascalProviderSession: LanguageToolingSession {
                 guard name != "WHITESPACE" else { return nil }
                 classification = "comment"
             case .token(let kind):
-                let range = IncrementalParsing.SourceRange(element.range)
+                let range = element.range
                 if let semantic = semanticByRange[range] {
                     return LanguageProviderToken(
                         range: range,
@@ -199,7 +198,7 @@ public actor PascalProviderSession: LanguageToolingSession {
                 }
             }
             return LanguageProviderToken(
-                range: .init(element.range),
+                range: element.range,
                 classification: classification)
         }
     }
@@ -271,11 +270,5 @@ public actor PascalProviderSession: LanguageToolingSession {
         case .module: .module
         default: .variable
         }
-    }
-}
-
-private extension IncrementalParsing.SourceRange {
-    init(_ range: Range<Int>) {
-        self.init(range.lowerBound, range.upperBound)
     }
 }

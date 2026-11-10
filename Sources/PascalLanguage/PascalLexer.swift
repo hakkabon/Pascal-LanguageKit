@@ -1,6 +1,7 @@
 import Foundation
 import IncrementalParsing
 import Lexer
+import Parser
 
 public struct PascalTokenKind: RawRepresentable, Codable, Hashable, Sendable,
     CustomStringConvertible {
@@ -16,10 +17,20 @@ public struct PascalToken: Sendable, Equatable, Identifiable {
     public let id: String
     public let kind: PascalTokenKind
     public let lexeme: String
-    public let range: Range<Int>
+    public let range: SourceRange
     public let line: Int
     public let column: Int
     public let isEndOfInput: Bool
+}
+
+extension PascalToken: ConcreteSyntaxToken {
+    public var concreteIdentity: String { id }
+    public var concreteKind: PascalTokenKind { kind }
+    public var concreteLexeme: String { lexeme }
+    public var concreteRange: SourceRange { range }
+    public var concretePosition: SourcePosition {
+        SourcePosition(offset: range.location, line: line, column: column)
+    }
 }
 
 public enum PascalLexicalElementKind: Sendable, Equatable {
@@ -32,18 +43,10 @@ public struct PascalLexicalElement: Sendable, Equatable, Identifiable {
     public let id: String
     public let kind: PascalLexicalElementKind
     public let lexeme: String
-    public let range: Range<Int>
+    public let range: SourceRange
 }
 
-public struct PascalDiagnostic: Sendable, Equatable, Hashable {
-    public let message: String
-    public let range: Range<Int>
-
-    public init(message: String, range: Range<Int>) {
-        self.message = message
-        self.range = range
-    }
-}
+public typealias PascalDiagnostic = LanguageParseDiagnostic<PascalTokenKind>
 
 public struct PascalLexResult: Sendable, Equatable {
     public let tokens: [PascalToken]
@@ -162,7 +165,8 @@ private func project(_ token: GrammarLexicalToken) -> PascalToken {
         id: token.id,
         kind: PascalTokenKind(rawValue: token.kind),
         lexeme: token.lexeme,
-        range: token.range,
+        range: SourceRange(
+            token.range.lowerBound, token.range.upperBound),
         line: token.position.line,
         column: token.position.column,
         isEndOfInput: token.isEndOfInput)
@@ -179,9 +183,13 @@ private func project(_ element: GrammarLexicalElement) -> PascalLexicalElement {
         id: element.id,
         kind: kind,
         lexeme: element.lexeme,
-        range: element.range)
+        range: SourceRange(
+            element.range.lowerBound, element.range.upperBound))
 }
 
 private func project(_ diagnostic: GrammarLexicalDiagnostic) -> PascalDiagnostic {
-    PascalDiagnostic(message: diagnostic.message, range: diagnostic.range)
+    PascalDiagnostic(
+        severity: .error, message: diagnostic.message,
+        range: SourceRange(
+            diagnostic.range.lowerBound, diagnostic.range.upperBound))
 }

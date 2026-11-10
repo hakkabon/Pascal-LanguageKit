@@ -33,6 +33,9 @@ indexes program, constant, type, variable, procedure, and function declarations
 from the stable grammar-derived token stream. The shared tooling index now
 drives symbol-aware completion, definition, references, hover, and semantic
 tokens, while stable lexer identities publish incremental binding reuse.
+Its tokens, source ranges, diagnostics, and recovery projection now use the
+canonical Incremental-Parsing and Parser contracts; the kit does not define a
+second consumer-facing diagnostic or range model.
 
 ## Products
 

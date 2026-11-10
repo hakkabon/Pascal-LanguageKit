@@ -154,10 +154,11 @@ struct PascalIncrementalSemanticAnalyzer {
             let token = significant[index]
             let symbol = PascalSymbol(
                 id: "pascal-symbol:\(token.id)", name: token.lexeme,
-                kind: kind, declarationRange: .init(token.range))
+                kind: kind, declarationRange: token.range)
             let key = token.lexeme.lowercased()
             if symbolsByName[key] != nil {
                 diagnostics.append(.init(
+                    severity: .error,
                     message: "Duplicate Pascal declaration '\(token.lexeme)'.",
                     range: token.range))
             } else {
@@ -180,7 +181,7 @@ struct PascalIncrementalSemanticAnalyzer {
             else { role = .read }
             references.append(.init(
                 tokenID: token.id, symbolID: symbol.id,
-                range: .init(token.range), role: role))
+                range: token.range, role: role))
         }
 
         let semanticTokens = symbols.map {
@@ -216,10 +217,4 @@ struct PascalIncrementalSemanticAnalyzer {
     }
 
     mutating func reset() { previous = nil }
-}
-
-private extension SourceRange {
-    init(_ range: Range<Int>) {
-        self.init(range.lowerBound, range.upperBound)
-    }
 }
