@@ -90,10 +90,16 @@ public struct PascalIncrementalLexResult: Sendable, Equatable {
 }
 
 public struct PascalIncrementalTokenizer: Sendable {
-    private var tokenizer: GrammarIncrementalTokenizer
+    private var tokenizer: GrammarLanguageTokenizer<PascalLexicalProjection>
 
     public init(languageKit: PascalLanguageKit = .bundled) {
-        tokenizer = RestartAndConvergeTokenizer(scanner: makeScanner(languageKit))
+        do {
+            tokenizer = try GrammarLanguageTokenizer(
+                specification: languageKit.artifact.lexicalSpecification,
+                projection: PascalLexicalProjection())
+        } catch {
+            preconditionFailure("Invalid compiled Pascal lexical artifact: \(error)")
+        }
     }
 
     public mutating func tokenize(
@@ -103,11 +109,32 @@ public struct PascalIncrementalTokenizer: Sendable {
         let result = tokenizer.tokenize(snapshot: snapshot, change: change)
         return PascalIncrementalLexResult(
             revision: snapshot.revision,
-            lexed: project(result.output),
+            lexed: PascalLexResult(
+                tokens: result.output.tokens,
+                elements: result.output.elements,
+                diagnostics: result.output.diagnostics),
             metrics: result.metrics)
     }
 
     public mutating func reset() { tokenizer.reset() }
+}
+
+private struct PascalLexicalProjection: GrammarLexicalProjection {
+    func token(_ token: GrammarLexicalToken) -> PascalToken {
+        project(token)
+    }
+
+    func element(
+        _ element: GrammarLexicalElement
+    ) -> PascalLexicalElement? {
+        project(element)
+    }
+
+    func diagnostic(
+        _ diagnostic: GrammarLexicalDiagnostic
+    ) -> PascalDiagnostic {
+        project(diagnostic)
+    }
 }
 
 private func makeScanner(_ languageKit: PascalLanguageKit) -> GrammarDrivenLexer {
@@ -128,17 +155,6 @@ private func project(
         tokens: scan.tokens.map(project),
         elements: scan.elements.map(project),
         diagnostics: scan.diagnostics.map(project))
-}
-
-private func project(
-    _ output: IncrementalLexicalOutput<GrammarLexicalToken,
-                                      GrammarLexicalElement,
-                                      GrammarLexicalDiagnostic>
-) -> PascalLexResult {
-    PascalLexResult(
-        tokens: output.tokens.map(project),
-        elements: output.elements.map(project),
-        diagnostics: output.diagnostics.map(project))
 }
 
 private func project(_ token: GrammarLexicalToken) -> PascalToken {
