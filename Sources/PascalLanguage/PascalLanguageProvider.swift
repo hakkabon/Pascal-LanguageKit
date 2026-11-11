@@ -18,6 +18,12 @@ public struct PascalProvider: LanguageToolingProvider {
     public func makeToolingSession() -> any LanguageToolingSession {
         PascalProviderSession()
     }
+
+    public func makeToolingSession(
+        documentURI: String
+    ) -> any LanguageToolingSession {
+        PascalProviderSession(documentURI: documentURI)
+    }
 }
 public actor PascalProviderSession: LanguageToolingSession {
     private let languageKit: PascalLanguageKit
