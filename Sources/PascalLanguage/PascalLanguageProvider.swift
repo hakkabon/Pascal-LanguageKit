@@ -60,9 +60,17 @@ public actor PascalProviderSession: LanguageToolingSession {
             recoveryEdits: analysis.parsing.recoveryEdits.map { edit in
                 switch edit {
                 case .insert(let terminal, let index):
-                    .insert(terminal: terminal, atToken: index)
+                    let offset = analysis.lexing.lexed.tokens.indices.contains(index)
+                        ? analysis.lexing.lexed.tokens[index].range.location
+                        : snapshot.utf16Count
+                    return .init(action: .insert(
+                        terminal: terminal, atUTF16Offset: offset))
                 case .delete(let terminal, let index):
-                    .delete(terminal: terminal, atToken: index)
+                    let range = analysis.lexing.lexed.tokens.indices.contains(index)
+                        ? analysis.lexing.lexed.tokens[index].range
+                        : SourceRange(location: snapshot.utf16Count, length: 0)
+                    return .init(action: .delete(
+                        terminal: terminal, range: range))
                 }
             },
             operations: [

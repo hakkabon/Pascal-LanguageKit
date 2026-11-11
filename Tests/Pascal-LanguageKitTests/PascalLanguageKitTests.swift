@@ -119,6 +119,9 @@ struct PascalLanguageKitTests {
 
         #expect(analysis.diagnostics.allSatisfy { $0.severity == .warning })
         #expect(!analysis.recoveryEdits.isEmpty)
+        #expect(analysis.recoveryEdits.allSatisfy {
+            $0.range.location <= PascalConformanceCorpus.rejected[0].utf16.count
+        })
     }
 
     @Test func providerAdoptsSharedToolingSession() async throws {
