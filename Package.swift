@@ -14,12 +14,12 @@ let package = Package(
         .library(name: "PascalFrontendConformance", targets: ["PascalFrontendConformance"]),
     ],
     dependencies: [
-        .package(path: "../Grammar"),
-        .package(path: "../Lexer"),
-        .package(path: "../Parser"),
-        .package(path: "../Earley-Parser"),
-        .package(path: "../Incremental-Parsing"),
-        .package(path: "../Language-Tooling"),
+        .package(url: "https://github.com/hakkabon/Grammar.git", .upToNextMinor(from: "0.9.1")),
+        .package(url: "https://github.com/hakkabon/Lexer.git", .upToNextMinor(from: "0.9.1")),
+        .package(url: "https://github.com/hakkabon/Parser.git", .upToNextMinor(from: "0.12.1")),
+        .package(url: "https://github.com/hakkabon/Earley-Parser.git", .upToNextMinor(from: "0.10.1")),
+        .package(url: "https://github.com/hakkabon/Incremental-Parsing.git", .upToNextMinor(from: "0.33.0")),
+        .package(url: "https://github.com/hakkabon/Language-Tooling.git", .upToNextMinor(from: "0.10.1")),
     ],
 
     targets: [
