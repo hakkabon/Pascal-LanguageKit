@@ -5,7 +5,7 @@ import PascalLanguage
 
 public enum PascalProductCampaign {
     public static let campaignProtocol = IncrementalMeasurementProtocol(
-        id: "pascal-language-kit-trial-v3",
+        id: "pascal-language-kit-trial-v4",
         warmupIterations: 1,
         measurementIterations: 3)
 
@@ -104,6 +104,14 @@ public enum PascalProductCampaign {
             source: PascalConformanceCorpus.mutationSeeds[1],
             editNeedle: "10",
             replacement: "20",
+            operation: "semantics"),
+        .init(
+            scenario: .init(
+                id: "edit.semantics.shadowing",
+                title: "Rebind references after renaming a shadowing declaration"),
+            source: PascalConformanceCorpus.scopedTooling,
+            editNeedle: "var count: integer; procedure Inner",
+            replacement: "var total: integer; procedure Inner",
             operation: "semantics"),
     ]
 
