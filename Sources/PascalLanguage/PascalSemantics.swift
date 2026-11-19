@@ -2,7 +2,7 @@ import IncrementalParsing
 import LanguageTooling
 
 public enum PascalSymbolKind: String, Sendable, Equatable, Codable {
-    case program, constant, type, variable, procedure, function
+    case program, constant, type, variable, parameter, procedure, function
 
     var toolingKind: ToolingSymbolKind {
         switch self {
@@ -10,6 +10,7 @@ public enum PascalSymbolKind: String, Sendable, Equatable, Codable {
         case .constant: .constant
         case .type: .type
         case .variable: .variable
+        case .parameter: .parameter
         case .procedure, .function: .function
         }
     }
@@ -20,6 +21,7 @@ public struct PascalSymbol: Sendable, Hashable, Identifiable {
     public let name: String
     public let kind: PascalSymbolKind
     public let declarationRange: SourceRange
+    public let scopeID: ToolingScopeID
 }
 
 public struct PascalSymbolReference: Sendable, Hashable, Identifiable {
@@ -62,19 +64,19 @@ public struct PascalSemanticModel: Sendable, Equatable {
     public let revision: SourceRevision
     public let symbols: [PascalSymbol]
     public let references: [PascalSymbolReference]
+    public let scopes: [ToolingScope]
     public let semanticTokens: [PascalSemanticToken]
     public let diagnostics: [PascalDiagnostic]
     public let reuseMetrics: PascalSemanticReuseMetrics
 
     public var toolingIndex: ToolingSemanticIndex {
-        let scope = ToolingScopeID("pascal:file")
-        return ToolingSemanticIndex(
+        ToolingSemanticIndex(
             symbols: symbols.map {
                 ToolingSymbol(
                     id: .init($0.id), name: $0.name,
                     kind: $0.kind.toolingKind,
                     declarationRange: $0.declarationRange,
-                    scopeID: scope,
+                    scopeID: $0.scopeID,
                     detail: "\($0.kind.rawValue) \($0.name)",
                     modifiers: ["declaration"])
             },
@@ -83,10 +85,7 @@ public struct PascalSemanticModel: Sendable, Equatable {
                     symbolID: .init($0.symbolID), range: $0.range,
                     role: $0.role)
             },
-            scopes: [.init(
-                id: scope, parentID: nil,
-                range: .init(0, Int.max),
-                symbolIDs: symbols.map { .init($0.id) })])
+            scopes: scopes)
     }
 }
 
@@ -99,78 +98,23 @@ struct PascalIncrementalSemanticAnalyzer {
         reusingPrevious: Bool
     ) -> PascalSemanticModel {
         let significant = tokens.filter { !$0.isEndOfInput }
-        var declarations: [(Int, PascalSymbolKind)] = []
-        var section: PascalSymbolKind?
-        var expectSingleDeclaration = false
-        var variableNames = false
-        var nextNamedDeclaration: PascalSymbolKind?
-
-        for (index, token) in significant.enumerated() {
-            let kind = token.kind.rawValue
-            switch kind {
-            case "PROGRAM":
-                nextNamedDeclaration = .program
-            case "CONST":
-                section = .constant; expectSingleDeclaration = true
-            case "TYPE":
-                section = .type; expectSingleDeclaration = true
-            case "VAR":
-                section = .variable; variableNames = true
-            case "PROCEDURE":
-                section = nil; nextNamedDeclaration = .procedure
-            case "FUNCTION":
-                section = nil; nextNamedDeclaration = .function
-            case "BEGIN":
-                section = nil
-            case "COLON" where section == .variable:
-                variableNames = false
-            case "SEMICOLON":
-                if section == .constant || section == .type {
-                    expectSingleDeclaration = true
-                } else if section == .variable {
-                    variableNames = true
-                }
-            case "IDENTIFIER":
-                if let named = nextNamedDeclaration {
-                    declarations.append((index, named))
-                    nextNamedDeclaration = nil
-                } else if section == .constant || section == .type,
-                          expectSingleDeclaration {
-                    declarations.append((index, section!))
-                    expectSingleDeclaration = false
-                } else if section == .variable, variableNames {
-                    declarations.append((index, .variable))
-                }
-            default:
-                break
-            }
-        }
-
-        let declarationByIndex = Dictionary(uniqueKeysWithValues: declarations)
-        var symbols: [PascalSymbol] = []
-        var symbolsByName: [String: PascalSymbol] = [:]
-        var diagnostics: [PascalDiagnostic] = []
-        for (index, kind) in declarations {
-            let token = significant[index]
-            let symbol = PascalSymbol(
-                id: "pascal-symbol:\(token.id)", name: token.lexeme,
-                kind: kind, declarationRange: token.range)
-            let key = token.lexeme.lowercased()
-            if symbolsByName[key] != nil {
-                diagnostics.append(.init(
-                    severity: .error,
-                    message: "Duplicate Pascal declaration '\(token.lexeme)'.",
-                    range: token.range))
-            } else {
-                symbolsByName[key] = symbol
-            }
-            symbols.append(symbol)
-        }
+        let declarations = PascalDeclarationIndex(tokens: significant)
+        let symbols = declarations.symbols
+        let symbolsByID = Dictionary(uniqueKeysWithValues: symbols.map { ($0.id, $0) })
+        let lookup = ToolingSemanticIndex(
+            symbols: symbols.map {
+                .init(id: .init($0.id), name: $0.name, kind: $0.kind.toolingKind,
+                      declarationRange: $0.declarationRange, scopeID: $0.scopeID)
+            }, references: [], scopes: declarations.scopes)
 
         var references: [PascalSymbolReference] = []
         for (index, token) in significant.enumerated()
-            where token.kind.rawValue == "IDENTIFIER" && declarationByIndex[index] == nil {
-            guard let symbol = symbolsByName[token.lexeme.lowercased()] else { continue }
+            where token.kind.rawValue == "IDENTIFIER" && !declarations.excludedReferences.contains(index) {
+            // A field selector is not a reference to an equally named local variable.
+            if index > 0 && significant[index - 1].kind.rawValue == "PERIOD" { continue }
+            guard let visible = lookup.visibleSymbols(at: token.range.location).first(where: {
+                $0.name.lowercased() == token.lexeme.lowercased()
+            }), let symbol = symbolsByID[visible.id.rawValue] else { continue }
             let previousKind = index > 0 ? significant[index - 1].kind.rawValue : ""
             let nextKind = index + 1 < significant.count
                 ? significant[index + 1].kind.rawValue : ""
@@ -189,23 +133,28 @@ struct PascalIncrementalSemanticAnalyzer {
                 range: $0.declarationRange, kind: $0.kind,
                 isDeclaration: true)
         } + references.compactMap { reference in
-            symbols.first(where: { $0.id == reference.symbolID }).map {
+            symbolsByID[reference.symbolID].map {
                 PascalSemanticToken(
                     range: reference.range, kind: $0.kind,
                     isDeclaration: false)
             }
         }
-        let oldSymbolIDs = reusingPrevious
-            ? Set(previous?.symbols.map(\.id) ?? []) : []
-        let oldReferenceIDs = reusingPrevious
-            ? Set(previous?.references.map(\.tokenID) ?? []) : []
-        let reusedSymbols = symbols.filter { oldSymbolIDs.contains($0.id) }.count
+        let oldSymbols = Dictionary(uniqueKeysWithValues:
+            (reusingPrevious ? previous?.symbols ?? [] : []).map { ($0.id, $0) })
+        let oldReferences = Dictionary(uniqueKeysWithValues:
+            (reusingPrevious ? previous?.references ?? [] : []).map { ($0.tokenID, $0) })
+        let reusedSymbols = symbols.filter {
+            guard let old = oldSymbols[$0.id] else { return false }
+            return old.name == $0.name && old.kind == $0.kind && old.scopeID == $0.scopeID
+        }.count
         let reusedReferences = references.filter {
-            oldReferenceIDs.contains($0.tokenID)
+            guard let old = oldReferences[$0.tokenID] else { return false }
+            return old.symbolID == $0.symbolID && old.role == $0.role
         }.count
         let model = PascalSemanticModel(
             revision: revision, symbols: symbols, references: references,
-            semanticTokens: semanticTokens, diagnostics: diagnostics,
+            scopes: declarations.scopes,
+            semanticTokens: semanticTokens, diagnostics: declarations.diagnostics,
             reuseMetrics: .init(
                 incremental: reusingPrevious && previous != nil,
                 reusedSymbolCount: reusedSymbols,

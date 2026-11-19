@@ -268,6 +268,7 @@ public actor PascalProviderSession: LanguageToolingSession {
         case .constant: .constant
         case .type: .type
         case .variable: .variable
+        case .parameter: .parameter
         case .procedure, .function: .function
         }
     }
@@ -276,11 +277,10 @@ public actor PascalProviderSession: LanguageToolingSession {
         -> ToolingCompletionKind {
         switch kind {
         case .constant: .constant
-        case .variable: .variable
+        case .variable, .parameter: .variable
         case .function: .function
         case .type: .type
         case .field: .field
-        case .parameter: .variable
         case .module: .module
         default: .variable
         }
